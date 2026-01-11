@@ -77,7 +77,8 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
 
     try {
       const response = await fetch(
-        "https://mdmuhir-legal-bee-api.hf.space/query",
+        // "http://localhost:8000/query",
+        "https://muhir-legalbee-api.hf.space/query",
         {
           method: "POST",
           headers: {
@@ -92,7 +93,7 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
       }
 
       const data = await response.json();
-      const responseText = data.response || "⚠️ দুঃখিত, আমি উত্তর আনতে পারিনি।";
+      const responseText = data.answer || "⚠️ দুঃখিত, আমি উত্তর আনতে পারিনি।";
 
       // Check if response is structured (contains emoji headers)
       const isStructured = /🎯|📚|⚖️|📋|⚠️|💼/.test(responseText);
@@ -308,7 +309,7 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
   return (
     <div className={cn("flex flex-col h-full bg-background", className)}>
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 max-w-4xl mx-auto w-full">
         {messages.map((message) => (
           <div
             key={message.id}
@@ -428,7 +429,7 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
 
       {/* Enhanced Input Area */}
       <div className="border-t bg-card/50 backdrop-blur-sm p-4">
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 max-w-4xl mx-auto">
           <Button
             variant="outline"
             size="icon"

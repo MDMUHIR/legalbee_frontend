@@ -14,6 +14,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthModal } from '@/components/auth/AuthModal';
+import { useIsMobile } from '@/hooks/use-mobile';
 import legalBeeLogo from '@/assets/legal-bee-logo.png';
 
 interface HeaderProps {
@@ -24,6 +25,7 @@ export const Header = ({ onEmergencyClick }: HeaderProps) => {
   const navigate = useNavigate();
   const { user, signOut, loading } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const handleSignOut = async () => {
     await signOut();
@@ -38,60 +40,65 @@ export const Header = ({ onEmergencyClick }: HeaderProps) => {
       <header className="border-b bg-card/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           {/* Logo & Brand */}
-          <div onClick={() => navigate('/')} className="flex items-center space-x-3 cursor-pointer">
-            <div className="flex items-center justify-center w-10 h-10">
+          <div onClick={() => navigate('/')} className="flex items-center space-x-2 sm:space-x-3 cursor-pointer min-w-0 flex-1">
+            <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0">
               <img
                 src={legalBeeLogo}
                 alt="Legal Bee Logo"
-                className="h-8 w-8 object-contain"
+                className="h-6 w-6 sm:h-8 sm:w-8 object-contain"
               />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-primary">LEGAL BEE</h1>
-              <p className="text-xs text-muted-foreground">AI Legal Assistant</p>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold text-primary truncate">LEGAL BEE</h1>
+              <p className="text-xs text-muted-foreground hidden sm:block">AI Legal Assistant</p>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center space-x-2">
+          <div className={`flex items-center ${isMobile ? 'space-x-1' : 'space-x-2'}`}>
             <Button
               onClick={onEmergencyClick}
               variant="outline"
-              size="icon"
-              className="border-emergency/20 hover:bg-emergency/5 animate-pulse-glow"
+              size={isMobile ? "default" : "icon"}
+              className={`border-emergency/20 hover:bg-emergency/5 animate-pulse-glow ${isMobile ? 'px-3 py-2' : 'p-2'}`}
             >
               <AlertTriangle className="h-4 w-4 text-emergency" />
+              {isMobile && <span className="ml-2 text-sm font-medium">Emergency</span>}
             </Button>
             <ThemeToggle />
             <Button
               onClick={() => navigate('/lawyers')}
               variant="outline"
-              size="icon"
-              className="border-primary/20 hover:bg-primary/5"
+              size={isMobile ? "sm" : "icon"}
+              className="border-primary/20 hover:bg-primary/5 p-2"
               title="Find Lawyers"
             >
-              <Users className="h-4 w-4 text-primary" />
+              <Users className={`${isMobile ? 'h-3 w-3' : 'h-4 w-4'} text-primary`} />
+              {isMobile && <span className="ml-1 text-xs hidden sm:inline">Lawyers</span>}
             </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="border-primary/20 hover:bg-primary/5"
-              title="Settings"
-            >
-              <Settings className="h-4 w-4 text-primary" />
-            </Button>
+            {!isMobile && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="border-primary/20 hover:bg-primary/5"
+                title="Settings"
+              >
+                <Settings className="h-4 w-4 text-primary" />
+              </Button>
+            )}
 
             {/* Authentication */}
             {!user ? (
               <Button
                 onClick={() => setAuthModalOpen(true)}
                 variant="outline"
-                size="icon"
-                className="border-primary/20 hover:bg-primary/5"
+                size={isMobile ? "sm" : "icon"}
+                className="border-primary/20 hover:bg-primary/5 p-2"
                 title="Sign In"
                 disabled={loading}
               >
-                <LogIn className="h-4 w-4 text-primary" />
+                <LogIn className={`${isMobile ? 'h-3 w-3' : 'h-4 w-4'} text-primary`} />
+                {isMobile && <span className="ml-1 text-xs">Sign In</span>}
               </Button>
             ) : (
               <DropdownMenu>
