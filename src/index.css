@@ -158,7 +158,35 @@ Golden bee theme with Bengali language support
     animation: slideInLeft 0.3s ease-out;
   }
 
-  /* Floating Action Button - No longer used */
+  /* Professional Legal Response Styling */
+  .legal-response {
+    animation: fadeInUp 0.35s ease-out;
+  }
+
+  /* Prose typography overrides for legal content */
+  .prose {
+    --tw-prose-body: hsl(var(--foreground) / 0.85);
+    --tw-prose-headings: hsl(var(--foreground));
+    --tw-prose-bold: hsl(var(--foreground));
+    --tw-prose-links: hsl(var(--primary));
+    --tw-prose-quotes: hsl(var(--foreground) / 0.8);
+    --tw-prose-quote-borders: hsl(var(--primary) / 0.6);
+    --tw-prose-code: hsl(var(--foreground) / 0.7);
+    --tw-prose-hr: hsl(var(--border));
+    --tw-prose-bullets: hsl(var(--muted-foreground));
+  }
+
+  .dark .prose {
+    --tw-prose-body: hsl(var(--foreground) / 0.85);
+    --tw-prose-headings: hsl(var(--foreground));
+    --tw-prose-bold: hsl(var(--foreground));
+    --tw-prose-links: hsl(var(--primary));
+    --tw-prose-quotes: hsl(var(--foreground) / 0.75);
+    --tw-prose-quote-borders: hsl(var(--primary) / 0.5);
+    --tw-prose-code: hsl(var(--foreground) / 0.65);
+    --tw-prose-hr: hsl(var(--border));
+    --tw-prose-bullets: hsl(var(--muted-foreground));
+  }
 
   /* Warning Banner */
   .warning-banner {
@@ -208,6 +236,17 @@ Golden bee theme with Bengali language support
     }
     50% {
       box-shadow: 0 0 0 8px hsl(var(--primary) / 0);
+    }
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
     }
   }
 

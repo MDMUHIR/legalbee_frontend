@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,9 +12,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   BookOpen,
-  Scale,
-  FileText,
-  AlertTriangle,
+  ChevronDown,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
@@ -26,6 +27,8 @@ interface Message {
   timestamp: Date;
   quickActions?: string[];
   isStructured?: boolean;
+  citations?: string[];
+  confidence?: "high" | "medium" | "low" | null;
 }
 
 interface ChatInterfaceProps {
@@ -36,9 +39,10 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
-      text: "আমি Legal Bee, আপনার ব্যক্তিগত আইনি সহায়ক। আমি আপনাকে বাংলাদেশের আইন সম্পর্কিত যে কোনো প্রশ্নে সহায়তা করতে পারি। আপনার প্রশ্ন করুন।",
+      text: "আমি **Legal Bee**, আপনার ব্যক্তিগত আইনি সহায়ক। আমি আপনাকে বাংলাদেশের আইন সম্পর্কিত যে কোনো প্রশ্নে সহায়তা করতে পারি।\n\nআপনার প্রশ্ন করুন।",
       isUser: false,
       timestamp: new Date(),
+      confidence: null,
       quickActions: [
         "Explain in simple words",
         "Show me the law reference",
@@ -83,17 +87,20 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
         language: "en",
         user_type: "general",
       });
+      
 
-      const answerText = data.answer || data.answer_markdown || "⚠️ দুঃখিত, আমি উত্তর আনতে পারিনি।";
-
-      const isStructured = /🎯|📚|⚖️|📋|⚠️|💼/.test(answerText);
+      const answerText =
+        data.answer_markdown ||
+        data.answer ||
+        "দুঃখিত, আমি উত্তর আনতে পারিনি।";
 
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: answerText,
         isUser: false,
         timestamp: new Date(),
-        isStructured,
+        citations: data.citations || [],
+        confidence: data.confidence || null,
         quickActions: [
           "Explain in simple words",
           "Show me the law reference",
@@ -129,74 +136,112 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
     handleSendMessage(action);
   };
 
-  // Enhanced message rendering with better structure
-  const renderStructuredMessage = (text: string) => {
-    const sections = text.split(/(?=🎯|📚|⚖️|📋|⚠️|💼)/);
+  const cleanAnswerText = (text: string): string => {
+    return text
+      .replace(/🎯|📚|⚖️|📋|⚠️|💼/g, "")
+      .replace(/→/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  };
+
+  const confidenceLabels: Record<
+    string,
+    { label: string; color: string }
+  > = {
+    high: {
+      label: "উচ্চ",
+      color:
+        "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800",
+    },
+    medium: {
+      label: "মধ্যম",
+      color:
+        "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800",
+    },
+    low: {
+      label: "নিম্ন",
+      color:
+        "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-800",
+    },
+  };
+
+  const renderBotMessage = (message: Message) => {
+    const cleanText = cleanAnswerText(message.text);
 
     return (
-      <div className="space-y-4">
-        {sections.map((section, idx) => {
-          if (!section.trim()) return null;
+      <div className="space-y-5">
+        <div
+          className="
+            prose prose-sm max-w-none dark:prose-invert
+            prose-headings:font-semibold prose-headings:tracking-tight
+            prose-h1:text-xl prose-h1:mt-0
+            prose-h2:text-base prose-h2:mt-5 prose-h2:mb-2
+            prose-h3:text-sm
+            prose-p:text-sm prose-p:leading-relaxed prose-p:text-foreground/85
+            prose-strong:text-foreground prose-strong:font-semibold
+            prose-a:text-primary hover:prose-a:text-primary/80 prose-a:no-underline
+            prose-blockquote:border-l-2 prose-blockquote:border-primary/60
+            prose-blockquote:bg-muted/30 prose-blockquote:py-1.5 prose-blockquote:px-4
+            prose-blockquote:rounded-r-lg prose-blockquote:not-italic
+            prose-blockquote:text-sm prose-blockquote:text-foreground/80
+            prose-li:text-sm prose-li:text-foreground/85 prose-li:my-0.5
+            prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
+            prose-code:text-xs prose-code:font-normal
+            prose-hr:border-border/60
+          "
+        >
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {cleanText}
+          </ReactMarkdown>
+        </div>
 
-          const [header, ...content] = section.split("→");
-          const headerText = header.trim();
-          const contentText = content.join("→").trim();
-
-          let icon = null;
-          let bgColor = "";
-          let borderColor = "";
-
-          if (headerText.includes("🎯")) {
-            icon = <FileText className="h-4 w-4 text-blue-600" />;
-            bgColor = "bg-blue-50";
-            borderColor = "border-blue-200";
-          } else if (headerText.includes("📚")) {
-            icon = <BookOpen className="h-4 w-4 text-green-600" />;
-            bgColor = "bg-green-50";
-            borderColor = "border-green-200";
-          } else if (headerText.includes("⚖️")) {
-            icon = <Scale className="h-4 w-4 text-purple-600" />;
-            bgColor = "bg-purple-50";
-            borderColor = "border-purple-200";
-          } else if (headerText.includes("📋")) {
-            icon = <FileText className="h-4 w-4 text-orange-600" />;
-            bgColor = "bg-orange-50";
-            borderColor = "border-orange-200";
-          } else if (headerText.includes("⚠️")) {
-            icon = <AlertTriangle className="h-4 w-4 text-red-600" />;
-            bgColor = "bg-red-50";
-            borderColor = "border-red-200";
-          } else {
-            bgColor = "bg-red-200";
-            borderColor = "border-red-200";
-          }
-
-          return (
-            <div
-              key={idx}
-              className={cn("rounded-lg border p-3", bgColor, borderColor)}
-            >
-              <div className="flex items-start gap-2">
-                {icon}
-                <div className="flex-1">
-                  <h4 className="font-semibold text-sm mb-1 text-gray-800">
-                    {headerText.replace(/🎯|📚|⚖️|📋|⚠️|💼/g, "").trim()}
-                  </h4>
-                  <p className="text-sm text-gray-700 leading-relaxed">
-                    {contentText}
-                  </p>
+        {message.citations && message.citations.length > 0 && (
+          <details className="group">
+            <summary className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors py-1 select-none">
+              <BookOpen className="h-3.5 w-3.5" />
+              <span className="font-medium">
+                সূত্র ও রেফারেন্স ({message.citations.length})
+              </span>
+              <ChevronDown className="h-3 w-3 group-open:rotate-180 transition-transform duration-200" />
+            </summary>
+            <div className="mt-2.5 space-y-1.5 pl-5">
+              {message.citations.map((citation, idx) => (
+                <div
+                  key={idx}
+                  className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 border border-border/40 leading-relaxed"
+                >
+                  {citation}
                 </div>
-              </div>
+              ))}
             </div>
-          );
-        })}
+          </details>
+        )}
+
+        {message.confidence && (
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-[11px] text-muted-foreground font-medium">
+              নির্ভরযোগ্যতা:
+            </span>
+            <span
+              className={cn(
+                "text-[11px] px-2 py-0.5 rounded-full font-medium border",
+                confidenceLabels[message.confidence]?.color ||
+                  "bg-muted text-muted-foreground border-border",
+              )}
+            >
+              {confidenceLabels[message.confidence]?.label ||
+                message.confidence}
+            </span>
+          </div>
+        )}
       </div>
     );
   };
 
   const renderMessage = (message: Message) => {
-    if (message.isStructured && !message.isUser) {
-      return renderStructuredMessage(message.text);
+    if (!message.isUser) {
+      return renderBotMessage(message);
     }
 
     return (
@@ -279,7 +324,7 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
   const speakText = (text: string) => {
     if (synthRef.current && "speechSynthesis" in window) {
       synthRef.current.cancel();
-      const cleanText = text.replace(/🎯|📚|⚖️|📋|⚠️|💼|→|\*\*/g, "");
+      const cleanText = text.replace(/🎯|📚|⚖️|📋|⚠️|💼|→|\*\*|#|>|-|\|/g, "");
       const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = "bn-BD";
       utterance.rate = 0.9;
@@ -304,23 +349,23 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
             key={message.id}
             className={cn(
               "flex",
-              message.isUser ? "justify-end" : "justify-start"
+              message.isUser ? "justify-end" : "justify-start",
             )}
           >
             <div className="flex flex-col max-w-[85%]">
               <div
                 className={cn(
-                  "rounded-2xl px-4 py-3 shadow-sm",
+                  "rounded-2xl px-5 py-4",
                   message.isUser
-                    ? "chat-bubble-user te xt-primary-foreground ml-auto"
-                    : "bg-card border border-border"
+                    ? "chat-bubble-user text-primary-foreground ml-auto shadow-sm"
+                    : "legal-response bg-card/40 border border-border/30",
                 )}
               >
                 {renderMessage(message)}
 
                 {/* Message Actions Bar */}
-                <div className="flex items-center justify-between mt-3 pt-2 border-t border-white/10">
-                  <span className="text-xs opacity-70">
+                <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-border/30">
+                  <span className="text-xs text-muted-foreground">
                     {message.timestamp.toLocaleTimeString("bn-BD", {
                       hour: "2-digit",
                       minute: "2-digit",
@@ -425,7 +470,7 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
             className={cn(
               "shrink-0 border-primary/20 hover:bg-primary/5 transition-all duration-200",
               isListening &&
-                "bg-red-500 text-white border-red-500 animate-pulse"
+                "bg-red-500 text-white border-red-500 animate-pulse",
             )}
             onClick={isListening ? stopListening : startListening}
           >
