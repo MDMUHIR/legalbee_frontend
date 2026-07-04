@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
+import { chat as chatApi } from "@/services/api";
+import type { ChatResponse } from "@/types/api";
 
 interface Message {
   id: string;
@@ -60,7 +62,7 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
     scrollToBottom();
   }, [messages]);
 
-  // Enhanced API call with better response formatting
+  // API call using Legal Bee's /api/chat endpoint
   const handleSendMessage = async (text: string = inputText) => {
     if (!text.trim()) return;
 
@@ -76,31 +78,19 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
     setIsTyping(true);
 
     try {
-      const response = await fetch(
-        // "http://localhost:8000/query",
-        "https://muhir-legalbee-api.hf.space/query",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ query: text }),
-        }
-      );
+      const data: ChatResponse = await chatApi({
+        question: text,
+        language: "en",
+        user_type: "general",
+      });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.statusText}`);
-      }
+      const answerText = data.answer || data.answer_markdown || "⚠️ দুঃখিত, আমি উত্তর আনতে পারিনি।";
 
-      const data = await response.json();
-      const responseText = data.answer || "⚠️ দুঃখিত, আমি উত্তর আনতে পারিনি।";
-
-      // Check if response is structured (contains emoji headers)
-      const isStructured = /🎯|📚|⚖️|📋|⚠️|💼/.test(responseText);
+      const isStructured = /🎯|📚|⚖️|📋|⚠️|💼/.test(answerText);
 
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: responseText,
+        text: answerText,
         isUser: false,
         timestamp: new Date(),
         isStructured,
@@ -108,7 +98,6 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
           "Explain in simple words",
           "Show me the law reference",
           "Get more examples",
-          // "Translate to Bengali",
         ],
       };
 

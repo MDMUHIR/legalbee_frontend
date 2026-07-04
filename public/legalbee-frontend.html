@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Legal Bee — Bangladeshi Legal RAG</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --accent: #818cf8;
+  --accent-hover: #6366f1;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --border: #334155;
+  --green: #22c55e;
+  --yellow: #eab308;
+  --red: #ef4444;
+  --radius: 8px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+.container { max-width: 900px; margin: 0 auto; padding: 16px; }
+
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 0; border-bottom: 1px solid var(--border); margin-bottom: 20px;
+  flex-wrap: wrap; gap: 12px;
+}
+
+.logo-area { display: flex; align-items: center; gap: 12px; }
+.logo-area h1 { font-size: 1.4rem; font-weight: 700; }
+.logo-area span { font-size: 0.85rem; color: var(--text-muted); }
+
+.health-dot {
+  width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+  margin-right: 6px; vertical-align: middle;
+}
+.health-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.health-dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); }
+.health-text { font-size: 0.8rem; color: var(--text-muted); }
+
+.tabs {
+  display: flex; gap: 2px; background: var(--card); border-radius: var(--radius);
+  padding: 4px; margin-bottom: 20px;
+}
+.tab-btn {
+  flex: 1; padding: 10px 16px; border: none; cursor: pointer;
+  background: transparent; color: var(--text-muted); font-size: 0.9rem;
+  border-radius: 6px; transition: all 0.2s; font-weight: 500;
+}
+.tab-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+.tab-btn.active { background: var(--accent); color: #fff; }
+
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+}
+
+.form-group { margin-bottom: 16px; }
+.form-group label {
+  display: block; font-size: 0.85rem; font-weight: 600;
+  margin-bottom: 6px; color: var(--text-muted);
+}
+textarea, input[type="text"], select {
+  width: 100%; padding: 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--bg); color: var(--text);
+  font-size: 0.9rem; font-family: inherit; resize: vertical;
+  transition: border-color 0.2s;
+}
+textarea:focus, input:focus, select:focus {
+  outline: none; border-color: var(--accent);
+}
+textarea { min-height: 120px; }
+
+.radio-group { display: flex; gap: 16px; flex-wrap: wrap; }
+.radio-group label {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: 0.85rem; color: var(--text); font-weight: 400;
+}
+.radio-group input[type="radio"] { accent-color: var(--accent); width: 16px; height: 16px; }
+
+.button-group { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn {
+  padding: 10px 20px; border: none; border-radius: var(--radius);
+  cursor: pointer; font-size: 0.9rem; font-weight: 600;
+  transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-secondary:hover { background: rgba(255,255,255,0.05); }
+
+.spinner {
+  width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite;
+  display: inline-block; vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-text { font-size: 0.9rem; color: var(--text-muted); margin-top: 8px; }
+
+.result-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+}
+
+.result-card .answer-body { margin: 12px 0; }
+.result-card .answer-body h1 { font-size: 1.3rem; margin: 16px 0 8px; }
+.result-card .answer-body h2 { font-size: 1.1rem; margin: 14px 0 6px; }
+.result-card .answer-body h3 { font-size: 1rem; margin: 12px 0 6px; }
+.result-card .answer-body p { margin: 8px 0; }
+.result-card .answer-body ul, .result-card .answer-body ol { padding-left: 20px; margin: 8px 0; }
+.result-card .answer-body blockquote {
+  border-left: 3px solid var(--accent); padding: 8px 12px;
+  margin: 10px 0; background: rgba(129,140,248,0.08); border-radius: 4px;
+}
+.result-card .answer-body code {
+  background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; font-size: 0.85em;
+}
+.result-card .answer-body pre {
+  background: var(--bg); padding: 12px; border-radius: var(--radius);
+  overflow-x: auto; font-size: 0.85em; margin: 10px 0;
+}
+
+.badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 100px; font-size: 0.75rem; font-weight: 600;
+  white-space: nowrap;
+}
+.badge-conf-high { background: rgba(34,197,94,0.15); color: var(--green); }
+.badge-conf-medium { background: rgba(234,179,8,0.15); color: var(--yellow); }
+.badge-conf-low { background: rgba(239,68,68,0.15); color: var(--red); }
+.badge-info { background: rgba(129,140,248,0.15); color: var(--accent); }
+
+.citations-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.citations-section h4 { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; }
+.citation-chip {
+  display: inline-block; padding: 4px 10px; margin: 3px;
+  background: rgba(129,140,248,0.1); border: 1px solid rgba(129,140,248,0.3);
+  border-radius: 100px; font-size: 0.78rem; color: var(--accent);
+  cursor: pointer; transition: all 0.2s;
+}
+.citation-chip:hover { background: rgba(129,140,248,0.2); }
+
+.chunks-section { margin-top: 16px; }
+.chunks-section h4 { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; }
+.chunks-section summary { cursor: pointer; font-size: 0.85rem; color: var(--accent); }
+.chunk-item {
+  background: var(--bg); padding: 10px 12px; border-radius: 6px;
+  margin: 6px 0; font-size: 0.82rem;
+}
+.chunk-item .chunk-meta { color: var(--text-muted); font-size: 0.75rem; margin-bottom: 4px; }
+
+.error-box {
+  background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+  color: var(--red); padding: 12px 16px; border-radius: var(--radius);
+  font-size: 0.85rem; margin-top: 12px;
+}
+
+.empty-state { text-align: center; color: var(--text-muted); padding: 40px 20px; }
+.empty-state svg { display: block; margin: 0 auto 12px; opacity: 0.4; }
+
+.hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
+
+select {
+  appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+  padding-right: 32px;
+}
+
+@media (max-width: 600px) {
+  .container { padding: 10px; }
+  header { flex-direction: column; align-items: flex-start; }
+  .tabs { flex-wrap: wrap; }
+  .tab-btn { font-size: 0.8rem; padding: 8px 12px; }
+  .radio-group { flex-direction: column; gap: 8px; }
+  .button-group { flex-direction: column; }
+  .btn { width: 100%; justify-content: center; }
+  .badges { gap: 4px; }
+  .badge { font-size: 0.7rem; padding: 3px 8px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div class="logo-area">
+    <h1>⚖️ Legal Bee</h1>
+    <span>Bangladeshi Legal RAG</span>
+  </div>
+  <div>
+    <span id="healthDot" class="health-dot offline"></span>
+    <span id="healthText" class="health-text">Checking API...</span>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="chat">💬 Chat</button>
+  <button class="tab-btn" data-tab="search">🔍 Search</button>
+  <button class="tab-btn" data-tab="analyze">📋 Analyze</button>
+  <button class="tab-btn" data-tab="summary">📄 Summary</button>
+</div>
+
+<!-- CHAT TAB -->
+<div id="tab-chat" class="tab-content">
+  <div class="card">
+    <div class="form-group">
+      <label for="chatQuestion">Your legal question</label>
+      <textarea id="chatQuestion" placeholder="e.g. What is the punishment for theft under Bangladeshi law?"></textarea>
+    </div>
+    <div class="form-group">
+      <label>User type</label>
+      <div class="radio-group">
+        <label><input type="radio" name="chatUserType" value="general" checked> General Public</label>
+        <label><input type="radio" name="chatUserType" value="lawyer"> Lawyer (detailed)</label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Language</label>
+      <div class="radio-group">
+        <label><input type="radio" name="chatLang" value="" checked> Auto-detect</label>
+        <label><input type="radio" name="chatLang" value="en"> English</label>
+        <label><input type="radio" name="chatLang" value="bn"> Bengali</label>
+      </div>
+    </div>
+    <div class="button-group">
+      <button class="btn btn-primary" id="btnChatAsk">Ask</button>
+      <button class="btn btn-secondary" id="btnChatClear">Clear</button>
+    </div>
+    <p class="hint">Ctrl+Enter to submit</p>
+  </div>
+  <div id="chatResult"></div>
+</div>
+
+<!-- SEARCH TAB -->
+<div id="tab-search" class="tab-content" style="display:none">
+  <div class="card">
+    <div class="form-group">
+      <label for="searchQuery">Search query</label>
+      <textarea id="searchQuery" placeholder="e.g. Article 90E nomination requirements"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="searchFilters">Filters (JSON, optional)</label>
+      <input type="text" id="searchFilters" placeholder='{"act_name":"Penal Code","year":1860}'>
+      <p class="hint">Supported: act_name, year, document_type, language, chunk_type, hierarchy.section, hierarchy.article</p>
+    </div>
+    <div class="form-group">
+      <label for="searchTopK">Results count</label>
+      <select id="searchTopK">
+        <option value="5">5</option>
+        <option value="8" selected>8</option>
+        <option value="15">15</option>
+        <option value="25">25</option>
+      </select>
+    </div>
+    <div class="button-group">
+      <button class="btn btn-primary" id="btnSearchAsk">Search</button>
+      <button class="btn btn-secondary" id="btnSearchClear">Clear</button>
+    </div>
+  </div>
+  <div id="searchResult"></div>
+</div>
+
+<!-- ANALYZE TAB -->
+<div id="tab-analyze" class="tab-content" style="display:none">
+  <div class="card">
+    <div class="form-group">
+      <label for="analyzeFacts">Describe your legal situation</label>
+      <textarea id="analyzeFacts" placeholder="e.g. My landlord increased the rent by 50% without any written notice. What are my rights?"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Language</label>
+      <div class="radio-group">
+        <label><input type="radio" name="analyzeLang" value="en" checked> English</label>
+        <label><input type="radio" name="analyzeLang" value="bn"> Bengali</label>
+      </div>
+    </div>
+    <div class="button-group">
+      <button class="btn btn-primary" id="btnAnalyzeAsk">Analyze</button>
+      <button class="btn btn-secondary" id="btnAnalyzeClear">Clear</button>
+    </div>
+  </div>
+  <div id="analyzeResult"></div>
+</div>
+
+<!-- SUMMARY TAB -->
+<div id="tab-summary" class="tab-content" style="display:none">
+  <div class="card">
+    <div class="form-group">
+      <label for="summaryActName">Act name</label>
+      <input type="text" id="summaryActName" placeholder="e.g. Penal Code, 1860">
+    </div>
+    <div class="form-group">
+      <label>Language</label>
+      <div class="radio-group">
+        <label><input type="radio" name="summaryLang" value="en" checked> English</label>
+        <label><input type="radio" name="summaryLang" value="bn"> Bengali</label>
+      </div>
+    </div>
+    <div class="button-group">
+      <button class="btn btn-primary" id="btnSummaryAsk">Summarize</button>
+      <button class="btn btn-secondary" id="btnSummaryClear">Clear</button>
+    </div>
+  </div>
+  <div id="summaryResult"></div>
+</div>
+
+</div>
+
+<script>
+const API_BASE_URL = 'http://localhost:8000/api';
+
+const confBadge = { high: 'badge-conf-high', medium: 'badge-conf-medium', low: 'badge-conf-low' };
+
+function healthCheck() {
+  const dot = document.getElementById('healthDot');
+  const txt = document.getElementById('healthText');
+  fetch(`${API_BASE_URL}/health`)
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(d => {
+      dot.className = 'health-dot online';
+      txt.textContent = `${d.service || 'API'} v${d.version || '?'} — online`;
+    })
+    .catch(() => {
+      dot.className = 'health-dot offline';
+      txt.textContent = 'API offline';
+    });
+}
+
+function getRadioValue(name) {
+  const el = document.querySelector(`input[name="${name}"]:checked`);
+  return el ? el.value : '';
+}
+
+function buildRequest(body) {
+  const clean = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (v !== '' && v !== null && v !== undefined) clean[k] = v;
+  }
+  return clean;
+}
+
+function renderResult(containerId, data) {
+  const container = document.getElementById(containerId);
+  if (!data || data.error) {
+    container.innerHTML = `<div class="error-box">${data?.error || 'Unknown error'}</div>`;
+    return;
+  }
+
+  const answerHtml = data.answer_markdown ? marked.parse(data.answer_markdown) : escapeHtml(data.answer || '');
+
+  let badgesHtml = '';
+  if (data.confidence) {
+    const cls = confBadge[data.confidence] || 'badge-info';
+    badgesHtml += `<span class="badge ${cls}">${data.confidence.toUpperCase()} confidence</span>`;
+  }
+  if (data.query_type) {
+    badgesHtml += `<span class="badge badge-info">${data.query_type}</span>`;
+  }
+  if (data.language_detected) {
+    badgesHtml += `<span class="badge badge-info">${data.language_detected.toUpperCase()}</span>`;
+  }
+  if (data.execution_time_ms != null) {
+    badgesHtml += `<span class="badge badge-info">${Math.round(data.execution_time_ms)}ms</span>`;
+  }
+
+  let citationsHtml = '';
+  if (data.citations && data.citations.length > 0) {
+    citationsHtml = `
+      <div class="citations-section">
+        <h4>📚 Citations</h4>
+        ${data.citations.map(c => `<span class="citation-chip">${escapeHtml(c)}</span>`).join('')}
+      </div>`;
+  }
+
+  let chunksHtml = '';
+  if (data.retrieved_chunks && data.retrieved_chunks.length > 0) {
+    chunksHtml = `
+      <div class="chunks-section">
+        <details>
+          <summary>Retrieved chunks (${data.retrieved_chunks.length})</summary>
+          ${data.retrieved_chunks.map(c => `
+            <div class="chunk-item">
+              <div class="chunk-meta">
+                ${c.citation || c.chunk_id} &middot; score: ${c.score?.toFixed(3)} &middot; ${c.chunk_type || ''}
+              </div>
+              <div>${escapeHtml((c.text || '').substring(0, 300))}${c.text && c.text.length > 300 ? '...' : ''}</div>
+            </div>
+          `).join('')}
+        </details>
+      </div>`;
+  }
+
+  container.innerHTML = `
+    <div class="result-card">
+      ${badgesHtml ? `<div class="badges">${badgesHtml}</div>` : ''}
+      <div class="answer-body">${answerHtml}</div>
+      ${citationsHtml}
+      ${chunksHtml}
+    </div>`;
+}
+
+function showLoading(containerId, text = 'Searching legal database...') {
+  document.getElementById(containerId).innerHTML = `
+    <div class="card" style="text-align:center">
+      <span class="spinner"></span>
+      <span class="loading-text" style="margin-left:8px">${text}</span>
+    </div>`;
+}
+
+function showError(containerId, msg) {
+  document.getElementById(containerId).innerHTML = `<div class="error-box">${escapeHtml(msg)}</div>`;
+}
+
+async function apiCall(endpoint, body, resultContainerId) {
+  showLoading(resultContainerId);
+  try {
+    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildRequest(body))
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.detail || errBody.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    renderResult(resultContainerId, data);
+  } catch (e) {
+    showError(resultContainerId, e.message || 'Request failed');
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// --- Tabs ---
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+    document.getElementById('tab-' + btn.dataset.tab).style.display = '';
+  });
+});
+
+// --- Chat ---
+document.getElementById('btnChatAsk').addEventListener('click', () => {
+  const question = document.getElementById('chatQuestion').value.trim();
+  if (!question) return;
+  const body = {
+    question,
+    user_type: getRadioValue('chatUserType'),
+  };
+  const lang = getRadioValue('chatLang');
+  if (lang) body.language = lang;
+  apiCall('/chat', body, 'chatResult');
+});
+
+document.getElementById('btnChatClear').addEventListener('click', () => {
+  document.getElementById('chatQuestion').value = '';
+  document.getElementById('chatResult').innerHTML = '';
+});
+
+document.getElementById('chatQuestion').addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'Enter') document.getElementById('btnChatAsk').click();
+});
+
+// --- Search ---
+document.getElementById('btnSearchAsk').addEventListener('click', () => {
+  const query = document.getElementById('searchQuery').value.trim();
+  if (!query) return;
+  const body = { query, top_k: parseInt(document.getElementById('searchTopK').value) };
+  const filterStr = document.getElementById('searchFilters').value.trim();
+  if (filterStr) {
+    try { body.filters = JSON.parse(filterStr); }
+    catch (e) { showError('searchResult', 'Invalid JSON in filters'); return; }
+  }
+  apiCall('/search', body, 'searchResult');
+});
+
+document.getElementById('btnSearchClear').addEventListener('click', () => {
+  document.getElementById('searchQuery').value = '';
+  document.getElementById('searchFilters').value = '';
+  document.getElementById('searchResult').innerHTML = '';
+});
+
+document.getElementById('searchQuery').addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'Enter') document.getElementById('btnSearchAsk').click();
+});
+
+// --- Analyze ---
+document.getElementById('btnAnalyzeAsk').addEventListener('click', () => {
+  const facts = document.getElementById('analyzeFacts').value.trim();
+  if (!facts) return;
+  apiCall('/analyze', { facts, language: getRadioValue('analyzeLang') }, 'analyzeResult');
+});
+
+document.getElementById('btnAnalyzeClear').addEventListener('click', () => {
+  document.getElementById('analyzeFacts').value = '';
+  document.getElementById('analyzeResult').innerHTML = '';
+});
+
+// --- Summary ---
+document.getElementById('btnSummaryAsk').addEventListener('click', () => {
+  const act_name = document.getElementById('summaryActName').value.trim();
+  if (!act_name) return;
+  apiCall('/summary', { act_name, language: getRadioValue('summaryLang') }, 'summaryResult');
+});
+
+document.getElementById('btnSummaryClear').addEventListener('click', () => {
+  document.getElementById('summaryActName').value = '';
+  document.getElementById('summaryResult').innerHTML = '';
+});
+
+// --- Init ---
+healthCheck();
+setInterval(healthCheck, 30000);
+</script>
+</body>
+</html>
