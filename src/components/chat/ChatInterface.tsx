@@ -1,8 +1,18 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useMutation } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Mic,
   Send,
@@ -11,14 +21,17 @@ import {
   Copy,
   ThumbsUp,
   ThumbsDown,
-  BookOpen,
-  ChevronDown,
+  RotateCcw,
   ShieldCheck,
+  User,
+  Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { chat as chatApi } from "@/services/api";
-import type { ChatResponse } from "@/types/api";
+import type { ChatResponse, RetrievedChunk } from "@/types/api";
+import { detectLanguage, t, type UILang } from "@/lib/i18n";
+import { CitationsDisplay } from "./CitationsDisplay";
 
 interface Message {
   id: string;
@@ -26,9 +39,10 @@ interface Message {
   isUser: boolean;
   timestamp: Date;
   quickActions?: string[];
-  isStructured?: boolean;
   citations?: string[];
+  retrievedChunks?: RetrievedChunk[];
   confidence?: "high" | "medium" | "low" | null;
+  lang?: UILang;
 }
 
 interface ChatInterfaceProps {
@@ -43,6 +57,7 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
       isUser: false,
       timestamp: new Date(),
       confidence: null,
+      lang: "bn",
       quickActions: [
         "Explain in simple words",
         "Show me the law reference",
@@ -51,48 +66,46 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
     },
   ]);
   const [inputText, setInputText] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [userType, setUserType] = useState<"general" | "lawyer">("general");
+  const [language, setLanguage] = useState<"auto" | "en" | "bn">("auto");
+  const lastUserMessageRef = useRef<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
-  // API call using Legal Bee's /api/chat endpoint
-  const handleSendMessage = async (text: string = inputText) => {
-    if (!text.trim()) return;
+  const resolveLanguage = useCallback(
+    (text: string): "en" | "bn" | undefined => {
+      if (language === "auto") return detectLanguage(text);
+      return language;
+    },
+    [language],
+  );
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: text.trim(),
-      isUser: true,
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInputText("");
-    setIsTyping(true);
-
-    try {
-      const data: ChatResponse = await chatApi({
-        question: text,
-        language: "en",
-        user_type: "general",
+  const chatMutation = useMutation<ChatResponse, Error, string>({
+    mutationFn: async (question: string) => {
+      const resolved = resolveLanguage(question);
+      return chatApi({
+        question,
+        language: resolved,
+        user_type: userType,
       });
-      
-
+    },
+    onSuccess: (data) => {
       const answerText =
-        data.answer_markdown ||
-        data.answer ||
-        "দুঃখিত, আমি উত্তর আনতে পারিনি।";
+        data.answer_markdown || data.answer || "দুঃখিত, আমি উত্তর আনতে পারিনি।";
+
+      const detectedLang: UILang =
+        data.language_detected === "bn" ? "bn" : "en";
 
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -100,7 +113,9 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
         isUser: false,
         timestamp: new Date(),
         citations: data.citations || [],
+        retrievedChunks: data.retrieved_chunks || [],
         confidence: data.confidence || null,
+        lang: detectedLang,
         quickActions: [
           "Explain in simple words",
           "Show me the law reference",
@@ -109,7 +124,8 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
       };
 
       setMessages((prev) => [...prev, botMessage]);
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error("Error fetching API:", error);
       setMessages((prev) => [
         ...prev,
@@ -118,12 +134,45 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
           text: "⚠️ সার্ভারে সংযোগ করতে সমস্যা হচ্ছে। পরে আবার চেষ্টা করুন।",
           isUser: false,
           timestamp: new Date(),
+          lang: "bn",
         },
       ]);
-    } finally {
-      setIsTyping(false);
+    },
+  });
+
+  const handleSendMessage = useCallback(
+    (text: string = inputText) => {
+      if (!text.trim() || chatMutation.isPending) return;
+
+      const trimmedText = text.trim();
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        text: trimmedText,
+        isUser: true,
+        timestamp: new Date(),
+      };
+
+      lastUserMessageRef.current = trimmedText;
+      setMessages((prev) => [...prev, userMessage]);
+      setInputText("");
+      chatMutation.mutate(trimmedText);
+    },
+    [inputText, chatMutation],
+  );
+
+  const handleRegenerate = useCallback(() => {
+    if (lastUserMessageRef.current && !chatMutation.isPending) {
+      const lastMessage = lastUserMessageRef.current;
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        text: lastMessage,
+        isUser: true,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+      chatMutation.mutate(lastMessage);
     }
-  };
+  }, [chatMutation]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -144,29 +193,9 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
       .trim();
   };
 
-  const confidenceLabels: Record<
-    string,
-    { label: string; color: string }
-  > = {
-    high: {
-      label: "উচ্চ",
-      color:
-        "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800",
-    },
-    medium: {
-      label: "মধ্যম",
-      color:
-        "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800",
-    },
-    low: {
-      label: "নিম্ন",
-      color:
-        "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-800",
-    },
-  };
-
   const renderBotMessage = (message: Message) => {
     const cleanText = cleanAnswerText(message.text);
+    const lang = message.lang || "en";
 
     return (
       <div className="space-y-5">
@@ -190,48 +219,32 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
             prose-hr:border-border/60
           "
         >
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {cleanText}
-          </ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanText}</ReactMarkdown>
         </div>
 
-        {message.citations && message.citations.length > 0 && (
-          <details className="group">
-            <summary className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors py-1 select-none">
-              <BookOpen className="h-3.5 w-3.5" />
-              <span className="font-medium">
-                সূত্র ও রেফারেন্স ({message.citations.length})
-              </span>
-              <ChevronDown className="h-3 w-3 group-open:rotate-180 transition-transform duration-200" />
-            </summary>
-            <div className="mt-2.5 space-y-1.5 pl-5">
-              {message.citations.map((citation, idx) => (
-                <div
-                  key={idx}
-                  className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 border border-border/40 leading-relaxed"
-                >
-                  {citation}
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
+        <CitationsDisplay
+          citations={message.citations || []}
+          retrievedChunks={message.retrievedChunks}
+          lang={lang}
+        />
 
         {message.confidence && (
           <div className="flex items-center gap-1.5">
             <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-[11px] text-muted-foreground font-medium">
-              নির্ভরযোগ্যতা:
+              {t("confidence", lang)}:
             </span>
             <span
               className={cn(
                 "text-[11px] px-2 py-0.5 rounded-full font-medium border",
-                confidenceLabels[message.confidence]?.color ||
-                  "bg-muted text-muted-foreground border-border",
+                message.confidence === "high"
+                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800"
+                  : message.confidence === "medium"
+                    ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800"
+                    : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-800",
               )}
             >
-              {confidenceLabels[message.confidence]?.label ||
-                message.confidence}
+              {t(message.confidence, lang)}
             </span>
           </div>
         )}
@@ -261,7 +274,26 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
     });
   };
 
-  // Speech Recognition + TTS
+  const speakText = (text: string) => {
+    if (synthRef.current && "speechSynthesis" in window) {
+      synthRef.current.cancel();
+      const cleanText = text.replace(/🎯|📚|⚖️|📋|⚠️|💼|→|\*\*|#|>|-|\|/g, "");
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = "bn-BD";
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      synthRef.current.speak(utterance);
+    } else {
+      toast({
+        title: "Text-to-speech unavailable",
+        description: "Text-to-speech is not supported in your browser.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Speech Recognition
   useEffect(() => {
     if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
       const SpeechRecognition =
@@ -321,27 +353,49 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
     }
   };
 
-  const speakText = (text: string) => {
-    if (synthRef.current && "speechSynthesis" in window) {
-      synthRef.current.cancel();
-      const cleanText = text.replace(/🎯|📚|⚖️|📋|⚠️|💼|→|\*\*|#|>|-|\|/g, "");
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = "bn-BD";
-      utterance.rate = 0.9;
-      utterance.pitch = 1;
-      utterance.volume = 1;
-      synthRef.current.speak(utterance);
-    } else {
-      toast({
-        title: "Text-to-speech unavailable",
-        description: "Text-to-speech is not supported in your browser.",
-        variant: "destructive",
-      });
-    }
+  const isLastBotMessage = (message: Message) => {
+    const botMsgs = messages.filter((m) => !m.isUser);
+    return botMsgs.length > 0 && botMsgs[botMsgs.length - 1].id === message.id;
   };
 
   return (
     <div className={cn("flex flex-col h-full bg-background", className)}>
+      {/* Chat controls bar */}
+      <div className="border-b px-4 py-2 flex items-center gap-3 max-w-4xl mx-auto w-full">
+        <ToggleGroup
+          type="single"
+          value={userType}
+          onValueChange={(val) => {
+            if (val) setUserType(val as "general" | "lawyer");
+          }}
+          variant="outline"
+          size="sm"
+        >
+          <ToggleGroupItem value="general" aria-label="General user">
+            <User className="h-3.5 w-3.5 mr-1" />
+            <span className="text-xs">General</span>
+          </ToggleGroupItem>
+          <ToggleGroupItem value="lawyer" aria-label="Lawyer user">
+            <Briefcase className="h-3.5 w-3.5 mr-1" />
+            <span className="text-xs">Lawyer</span>
+          </ToggleGroupItem>
+        </ToggleGroup>
+
+        <Select
+          value={language}
+          onValueChange={(val) => setLanguage(val as "auto" | "en" | "bn")}
+        >
+          <SelectTrigger className="h-8 w-[110px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Auto</SelectItem>
+            <SelectItem value="en">English</SelectItem>
+            <SelectItem value="bn">বাংলা</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6 max-w-4xl mx-auto w-full">
         {messages.map((message) => (
@@ -392,7 +446,20 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
                         <Copy className="h-3 w-3" />
                       </Button>
 
-                      <div className="flex gap-1 ml-2">
+                      {isLastBotMessage(message) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 opacity-60 hover:opacity-100"
+                          onClick={handleRegenerate}
+                          disabled={chatMutation.isPending}
+                          title="Regenerate response"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                        </Button>
+                      )}
+
+                      <div className="flex gap-1 ml-1">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -413,46 +480,22 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
                   )}
                 </div>
               </div>
-
-              {/* Enhanced Quick Action Buttons */}
-              {/* {!message.isUser && message.quickActions && (
-                <div className="flex flex-wrap gap-2 mt-3 ml-2">
-                  {message.quickActions.map((action, idx) => (
-                    <Button
-                      key={idx}
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-8 px-3 border-primary/20 text-primary hover:bg-primary/10 hover:border-primary/40 transition-all duration-200"
-                      onClick={() => handleQuickAction(action)}
-                    >
-                      {action}
-                    </Button>
-                  ))}
-                </div>
-              )} */}
             </div>
           </div>
         ))}
 
-        {/* Enhanced Typing Indicator */}
-        {isTyping && (
+        {/* Loading skeleton */}
+        {chatMutation.isPending && (
           <div className="flex justify-start">
-            <div className="bg-card border border-border rounded-2xl px-4 py-3 shadow-sm">
-              <div className="flex items-center space-x-3">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
-                  <div
-                    className="w-2 h-2 bg-primary rounded-full animate-bounce"
-                    style={{ animationDelay: "0.1s" }}
-                  ></div>
-                  <div
-                    className="w-2 h-2 bg-primary rounded-full animate-bounce"
-                    style={{ animationDelay: "0.2s" }}
-                  ></div>
-                </div>
-                <span className="text-sm text-muted-foreground">
-                  Legal Bee is analyzing...
-                </span>
+            <div className="bg-card/40 border border-border/30 rounded-2xl px-5 py-4 max-w-[85%] w-full">
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
+                <Skeleton className="h-4 w-4/6" />
+                <Skeleton className="h-3 w-3/6" />
+              </div>
+              <div className="mt-3 pt-2.5 border-t border-border/30">
+                <Skeleton className="h-3 w-24" />
               </div>
             </div>
           </div>
@@ -461,7 +504,7 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Enhanced Input Area */}
+      {/* Input Area */}
       <div className="border-t bg-card/50 backdrop-blur-sm p-4">
         <div className="flex items-center space-x-3 max-w-4xl mx-auto">
           <Button
@@ -492,7 +535,7 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
             />
             <Button
               onClick={() => handleSendMessage()}
-              disabled={!inputText.trim() || isTyping}
+              disabled={!inputText.trim() || chatMutation.isPending}
               size="icon"
               className="absolute right-1 top-1/2 -translate-y-1/2 h-10 w-10 bg-primary hover:bg-primary/90 rounded-full transition-all duration-200 disabled:opacity-50"
             >
@@ -501,7 +544,6 @@ export const ChatInterface = ({ className }: ChatInterfaceProps) => {
           </div>
         </div>
 
-        {/* Input Status */}
         {isListening && (
           <p className="text-xs text-center mt-2 text-red-600 animate-pulse">
             🎙️ Listening... Speak now in Bengali

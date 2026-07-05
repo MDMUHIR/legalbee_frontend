@@ -1,8 +1,10 @@
 import { Settings, AlertTriangle, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { health } from "@/services/api";
 import legalBeeLogo from "@/assets/legal-bee-logo.png";
 
 interface HeaderProps {
@@ -12,6 +14,16 @@ interface HeaderProps {
 export const Header = ({ onEmergencyClick }: HeaderProps) => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+
+  const healthQuery = useQuery({
+    queryKey: ["health"],
+    queryFn: health,
+    refetchInterval: 30000,
+    retry: 2,
+    staleTime: 15000,
+  });
+
+  const isHealthy = healthQuery.data?.status === "healthy";
 
   return (
     <>
@@ -36,6 +48,25 @@ export const Header = ({ onEmergencyClick }: HeaderProps) => {
               <p className="text-xs text-muted-foreground hidden sm:block">
                 AI Legal Assistant
               </p>
+            </div>
+            {/* Health indicator */}
+            <div className="flex items-center gap-1.5 ml-2" title={healthQuery.data ? `API: ${healthQuery.data.status}` : "Checking API..."}>
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  healthQuery.isLoading
+                    ? "bg-yellow-400 animate-pulse"
+                    : isHealthy
+                      ? "bg-green-500"
+                      : "bg-red-500"
+                }`}
+              />
+              <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                {healthQuery.isLoading
+                  ? "Checking"
+                  : isHealthy
+                    ? "Online"
+                    : "Offline"}
+              </span>
             </div>
           </div>
 
