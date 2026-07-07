@@ -234,8 +234,7 @@ legalbee/
     │   └── NotFound.tsx            # 404 page
     ├── components/
     │   ├── chat/
-    │   │   ├── ChatInterface.tsx   # Primary chat UI (markdown, voice, TTS)
-    │   │   └── LoveableUI.tsx      # Alternative/simpler chat UI
+    │   │   └── ChatInterface.tsx   # Chat UI (markdown, voice, TTS)
     │   ├── layout/
     │   │   └── Header.tsx          # Navigation bar with actions
     │   ├── emergency/
